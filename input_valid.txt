@@ -1,0 +1,6 @@
+int age;
+float price = 12.5;
+int count = 4;
+age = 20;
+count = count + 3;
+price = price * 2;

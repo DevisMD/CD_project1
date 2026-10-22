@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Variable Declaration Compiler — Interactive Demo</title>
+  <meta name="description" content="An interactive browser-based Variable Declaration Compiler that performs lexical analysis, syntax parsing, semantic checks, and displays a symbol table — built with Lex/Yacc concepts." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* DESIGN TOKENS */
+    :root {
+      --bg-deep:       #0b0f1a;
+      --bg-surface:    #111827;
+      --bg-card:       #1a2235;
+      --bg-input:      #0d1117;
+      --border:        rgba(99,179,237,0.15);
+      --border-glow:   rgba(99,179,237,0.4);
+      --accent-blue:   #63b3ed;
+      --accent-purple: #9f7aea;
+      --accent-green:  #48bb78;
+      --accent-yellow: #f6e05e;
+      --accent-red:    #fc8181;
+      --accent-orange: #f6ad55;
+      --accent-cyan:   #4fd1c5;
+      --text-primary:  #e2e8f0;
+      --text-secondary:#94a3b8;
+      --text-muted:    #4a5568;
+      --radius-sm:     6px;
+      --radius-md:     12px;
+      --radius-lg:     18px;
+      --shadow-glow:   0 0 30px rgba(99,179,237,0.12);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 20% 10%, rgba(99,179,237,0.06) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 80% 80%, rgba(159,122,234,0.06) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .particles { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+    .particle {
+      position: absolute; border-radius: 50%; opacity: 0.15;
+      animation: float linear infinite;
+    }
+    @keyframes float {
+      0%   { transform: translateY(110vh) scale(0); opacity: 0; }
+      10%  { opacity: 0.15; }
+      90%  { opacity: 0.15; }
+      100% { transform: translateY(-10vh) scale(1); opacity: 0; }
+    }
+
+    .wrapper { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 0 24px 60px; }
+
+    header { text-align: center; padding: 56px 0 40px; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(99,179,237,0.1); border: 1px solid var(--border-glow);
+      border-radius: 999px; padding: 6px 16px; font-size: 12px; font-weight: 600;
+      color: var(--accent-blue); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 20px;
+    }
+    .badge .dot { width: 6px; height: 6px; background: var(--accent-green); border-radius: 50%; animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.4); } }
+
+    h1 {
+      font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 800; line-height: 1.1;
+      background: linear-gradient(135deg, #e2e8f0 0%, var(--accent-blue) 50%, var(--accent-purple) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 14px;
+    }
+    .subtitle { color: var(--text-secondary); font-size: 1.05rem; max-width: 560px; margin: 0 auto; line-height: 1.6; }
+
+    .pipeline { display: flex; justify-content: center; align-items: center; gap: 0; flex-wrap: wrap; margin: 32px 0 40px; }
+    .pipeline-step {
+      display: flex; align-items: center; gap: 8px; padding: 8px 18px;
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm);
+      font-size: 12px; font-weight: 600; color: var(--text-secondary); transition: all 0.3s;
+    }
+    .pipeline-step.active { border-color: var(--border-glow); color: var(--accent-blue); box-shadow: 0 0 16px rgba(99,179,237,0.2); }
+    .pipeline-arrow { color: var(--text-muted); font-size: 18px; padding: 0 4px; }
+
+    .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    @media (max-width: 900px) { .main-grid { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg);
+      overflow: hidden; transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    .card:hover { border-color: var(--border-glow); box-shadow: var(--shadow-glow); }
+
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.02);
+    }
+    .card-title { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.06em; text-transform: uppercase; }
+    .card-title .indicator { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-blue); }
+
+    .editor-wrap { position: relative; }
+    .line-numbers {
+      position: absolute; left: 0; top: 0; bottom: 0; width: 44px;
+      background: rgba(0,0,0,0.2); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; padding: 16px 10px 16px 0;
+      font-family: 'Fira Code', monospace; font-size: 13px; color: var(--text-muted);
+      text-align: right; pointer-events: none; user-select: none; line-height: 1.6;
+    }
+    #code-input {
+      width: 100%; min-height: 260px; padding: 16px 16px 16px 56px;
+      background: var(--bg-input); color: var(--text-primary);
+      font-family: 'Fira Code', monospace; font-size: 14px; line-height: 1.6;
+      border: none; outline: none; resize: vertical; tab-size: 4; caret-color: var(--accent-blue);
+    }
+    #code-input::placeholder { color: var(--text-muted); }
+    #code-input:focus { background: rgba(13,17,23,0.9); }
+
+    .examples-bar {
+      display: flex; gap: 8px; padding: 12px 16px;
+      background: rgba(0,0,0,0.15); border-top: 1px solid var(--border); flex-wrap: wrap;
+    }
+    .example-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; align-self: center; }
+    .ex-btn {
+      padding: 5px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+      background: transparent; color: var(--text-secondary); font-size: 12px;
+      font-family: 'Fira Code', monospace; cursor: pointer; transition: all 0.2s;
+    }
+    .ex-btn:hover { border-color: var(--accent-blue); color: var(--accent-blue); background: rgba(99,179,237,0.05); }
+
+    .actions { padding: 16px; display: flex; gap: 12px; align-items: center; }
+    .btn-compile {
+      flex: 1; padding: 14px 24px; border-radius: var(--radius-md); border: none;
+      background: linear-gradient(135deg, #3b82f6, #6366f1); color: #fff;
+      font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer;
+      transition: all 0.25s; position: relative; overflow: hidden; letter-spacing: 0.02em;
+    }
+    .btn-compile::before { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent); opacity: 0; transition: opacity 0.25s; }
+    .btn-compile:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(99,102,241,0.4); }
+    .btn-compile:hover::before { opacity: 1; }
+    .btn-compile:active { transform: translateY(0); }
+    .btn-compile.running { background: linear-gradient(135deg, #1e40af, #4f46e5); pointer-events: none; }
+    .btn-clear {
+      padding: 14px 20px; border-radius: var(--radius-md); border: 1px solid var(--border);
+      background: transparent; color: var(--text-secondary); font-family: 'Inter', sans-serif;
+      font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+    }
+    .btn-clear:hover { border-color: var(--accent-red); color: var(--accent-red); background: rgba(252,129,129,0.05); }
+
+    .output-panel { display: flex; flex-direction: column; height: 100%; }
+    .output-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 16px; gap: 0; }
+    .tab {
+      padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-muted);
+      cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s;
+      text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap;
+    }
+    .tab:hover { color: var(--text-secondary); }
+    .tab.active { color: var(--accent-blue); border-bottom-color: var(--accent-blue); }
+
+    .tab-content { display: none; flex: 1; overflow-y: auto; }
+    .tab-content.active { display: block; }
+
+    #token-list {
+      padding: 16px; min-height: 200px; display: flex;
+      flex-wrap: wrap; gap: 8px; align-content: flex-start;
+    }
+    .token-chip {
+      display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
+      border-radius: var(--radius-sm); font-family: 'Fira Code', monospace;
+      font-size: 12px; font-weight: 500; border: 1px solid transparent;
+      animation: chipIn 0.3s ease forwards; opacity: 0;
+    }
+    @keyframes chipIn {
+      from { transform: scale(0.7) translateY(8px); opacity: 0; }
+      to   { transform: scale(1) translateY(0); opacity: 1; }
+    }
+    .token-chip.KEYWORD    { background: rgba(159,122,234,0.15); border-color: rgba(159,122,234,0.4); color: var(--accent-purple); }
+    .token-chip.IDENTIFIER { background: rgba(99,179,237,0.12);  border-color: rgba(99,179,237,0.35);  color: var(--accent-blue); }
+    .token-chip.NUMBER     { background: rgba(246,224,94,0.12);  border-color: rgba(246,224,94,0.35);  color: var(--accent-yellow); }
+    .token-chip.OPERATOR   { background: rgba(246,173,85,0.12);  border-color: rgba(246,173,85,0.35);  color: var(--accent-orange); }
+    .token-chip.ASSIGN     { background: rgba(72,187,120,0.12);  border-color: rgba(72,187,120,0.35);  color: var(--accent-green); }
+    .token-chip.PUNCT      { background: rgba(148,163,184,0.1);  border-color: rgba(148,163,184,0.25); color: var(--text-secondary); }
+    .token-chip.PAREN      { background: rgba(79,209,197,0.1);   border-color: rgba(79,209,197,0.3);   color: var(--accent-cyan); }
+    .token-chip.ERROR      { background: rgba(252,129,129,0.12); border-color: rgba(252,129,129,0.4);  color: var(--accent-red); }
+    .token-label { font-size: 9px; font-weight: 700; opacity: 0.6; letter-spacing: 0.08em; }
+
+    #log-output { padding: 16px; font-family: 'Fira Code', monospace; font-size: 13px; line-height: 1.7; min-height: 200px; }
+    .log-line {
+      display: flex; gap: 10px; padding: 3px 0;
+      animation: slideIn 0.25s ease forwards; opacity: 0;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(-8px); opacity: 0; }
+      to   { transform: translateX(0); opacity: 1; }
+    }
+    .log-line .ln-prefix { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; min-width: 90px; padding-top: 2px; }
+    .log-line.decl .ln-prefix   { color: var(--accent-blue); }
+    .log-line.assign .ln-prefix { color: var(--accent-green); }
+    .log-line.syntax .ln-prefix { color: var(--accent-red); }
+    .log-line.semantic .ln-prefix { color: var(--accent-orange); }
+    .log-line.warning .ln-prefix  { color: var(--accent-yellow); }
+    .log-line.info .ln-prefix     { color: var(--text-muted); }
+    .log-line .ln-text { color: var(--text-primary); }
+
+    .sym-table-wrap { padding: 16px; overflow-x: auto; }
+    .sym-table { width: 100%; border-collapse: collapse; font-family: 'Fira Code', monospace; font-size: 13px; }
+    .sym-table thead th {
+      text-align: left; padding: 10px 14px; font-size: 11px; font-weight: 700;
+      color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; border-bottom: 1px solid var(--border);
+    }
+    .sym-table tbody tr { transition: background 0.15s; animation: rowIn 0.3s ease forwards; opacity: 0; }
+    @keyframes rowIn {
+      from { transform: translateY(6px); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
+    .sym-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+    .sym-table td { padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.04); color: var(--text-primary); }
+    .type-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+    .type-badge.int   { background: rgba(159,122,234,0.15); color: var(--accent-purple); }
+    .type-badge.float { background: rgba(99,179,237,0.12);  color: var(--accent-blue); }
+    .init-yes { color: var(--accent-green); font-weight: 600; }
+    .init-no  { color: var(--text-muted); }
+
+    .summary-wrap { padding: 16px; }
+    .summary-banner {
+      display: flex; align-items: center; gap: 14px; padding: 18px 20px;
+      border-radius: var(--radius-md); margin-bottom: 20px; border: 1px solid;
+      animation: fadeUp 0.4s ease forwards; opacity: 0;
+    }
+    @keyframes fadeUp {
+      from { transform: translateY(12px); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
+    .summary-banner.success { background: rgba(72,187,120,0.08); border-color: rgba(72,187,120,0.3); }
+    .summary-banner.error   { background: rgba(252,129,129,0.08); border-color: rgba(252,129,129,0.3); }
+    .summary-banner .big-icon { font-size: 36px; }
+    .summary-banner .title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+    .summary-banner.success .title { color: var(--accent-green); }
+    .summary-banner.error   .title { color: var(--accent-red); }
+    .summary-banner .desc { font-size: 13px; color: var(--text-secondary); }
+
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .stat-card {
+      background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+      padding: 16px; text-align: center; animation: fadeUp 0.4s ease forwards; opacity: 0;
+    }
+    .stat-card .stat-num { font-size: 28px; font-weight: 800; font-family: 'Fira Code', monospace; margin-bottom: 4px; }
+    .stat-card .stat-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.07em; }
+    .stat-card.vars   .stat-num { color: var(--accent-blue); }
+    .stat-card.syntax .stat-num { color: var(--accent-red); }
+    .stat-card.sem    .stat-num { color: var(--accent-orange); }
+
+    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; text-align: center; color: var(--text-muted); gap: 10px; }
+    .empty-state .es-icon { font-size: 40px; opacity: 0.4; }
+    .empty-state p { font-size: 13px; line-height: 1.5; }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 3px; }
+
+    .spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff;
+      border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    footer { text-align: center; padding: 32px 0 0; color: var(--text-muted); font-size: 12px; }
+
+    #toast {
+      position: fixed; bottom: 30px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--bg-card); border: 1px solid var(--border-glow);
+      color: var(--text-primary); padding: 12px 24px; border-radius: var(--radius-md);
+      font-size: 14px; font-weight: 500; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1); z-index: 999; pointer-events: none;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+<div class="particles" id="particles"></div>
+<div id="toast"></div>
+<div class="wrapper">
+  <header>
+    <div class="badge"><span class="dot"></span>Compiler Design &middot; Lex &amp; Yacc</div>
+    <h1>Variable Declaration<br/>Compiler</h1>
+    <p class="subtitle">
+      Interactive lexer + parser simulation. Type or paste variable declarations,
+      click <strong>Compile</strong>, and watch the analysis unfold in real time.
+    </p>
+    <div class="pipeline">
+      <div class="pipeline-step active" id="pipe-source">&#128221; Source Code</div>
+      <div class="pipeline-arrow">&#8594;</div>
+      <div class="pipeline-step" id="pipe-lex">&#128269; Lexer</div>
+      <div class="pipeline-arrow">&#8594;</div>
+      <div class="pipeline-step" id="pipe-parse">&#127794; Parser</div>
+      <div class="pipeline-arrow">&#8594;</div>
+      <div class="pipeline-step" id="pipe-sem">&#129504; Semantics</div>
+      <div class="pipeline-arrow">&#8594;</div>
+      <div class="pipeline-step" id="pipe-out">&#128202; Output</div>
+    </div>
+  </header>
+
+  <div class="main-grid">
+    <!-- Left: Editor -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <div class="indicator" style="background:var(--accent-green)"></div>
+          Source Code Editor
+        </div>
+        <span style="font-size:12px;color:var(--text-muted)">int &middot; float &middot; operators</span>
+      </div>
+      <div class="editor-wrap">
+        <div class="line-numbers" id="line-numbers">1</div>
+        <textarea id="code-input" spellcheck="false"
+          placeholder="// Type variable declarations here&#10;// Supported: int, float, assignments, arithmetic&#10;&#10;int age;&#10;float price = 12.5;&#10;age = 20;"></textarea>
+      </div>
+      <div class="examples-bar">
+        <span class="example-label">Examples:</span>
+        <button class="ex-btn" id="ex-valid">Valid</button>
+        <button class="ex-btn" id="ex-duplicate">Duplicate</button>
+        <button class="ex-btn" id="ex-invalid">Invalid</button>
+        <button class="ex-btn" id="ex-complex">Expressions</button>
+      </div>
+      <div class="actions">
+        <button class="btn-compile" id="btn-compile">&#9654;&nbsp; Compile</button>
+        <button class="btn-clear" id="btn-clear">Clear</button>
+      </div>
+    </div>
+
+    <!-- Right: Output -->
+    <div class="card output-panel">
+      <div class="card-header">
+        <div class="card-title">
+          <div class="indicator" id="out-indicator"></div>
+          Compiler Output
+        </div>
+        <span id="out-status" style="font-size:12px;color:var(--text-muted)">Waiting for input&hellip;</span>
+      </div>
+      <div class="output-tabs">
+        <div class="tab active" data-tab="tokens" id="tab-tokens">Tokens</div>
+        <div class="tab" data-tab="log" id="tab-log">Log</div>
+        <div class="tab" data-tab="symtab" id="tab-symtab">Symbol Table</div>
+        <div class="tab" data-tab="summary" id="tab-summary">Summary</div>
+      </div>
+      <div class="tab-content active" id="pane-tokens">
+        <div id="token-list"><div class="empty-state"><div class="es-icon">&#128269;</div><p>Token stream will appear here after compilation.</p></div></div>
+      </div>
+      <div class="tab-content" id="pane-log">
+        <div id="log-output"><div class="empty-state"><div class="es-icon">&#128203;</div><p>Compilation log will appear here.</p></div></div>
+      </div>
+      <div class="tab-content" id="pane-symtab">
+        <div class="sym-table-wrap" id="sym-table-wrap"><div class="empty-state"><div class="es-icon">&#128202;</div><p>Symbol table will be populated after compilation.</p></div></div>
+      </div>
+      <div class="tab-content" id="pane-summary">
+        <div class="summary-wrap" id="summary-wrap"><div class="empty-state"><div class="es-icon">&#127937;</div><p>Compilation summary will appear here.</p></div></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p>Variable Declaration Compiler &middot; Lex &amp; Yacc Educational Demo &nbsp;|&nbsp;
+    Supports <code>int</code>, <code>float</code>, arithmetic expressions, and semantic checks.</p>
+  </footer>
+</div>
+
+<script>
+// Particles
+(function() {
+  var c = document.getElementById('particles');
+  var colors = ['#63b3ed','#9f7aea','#48bb78','#f6e05e','#4fd1c5'];
+  for (var i = 0; i < 28; i++) {
+    var p = document.createElement('div');
+    p.className = 'particle';
+    var size = 2 + Math.random() * 5;
+    p.style.cssText = 'width:'+size+'px;height:'+size+'px;left:'+(Math.random()*100)+'%;background:'+colors[i%5]+';animation-duration:'+(12+Math.random()*20)+'s;animation-delay:'+(-Math.random()*20)+'s;';
+    c.appendChild(p);
+  }
+})();
+
+// Line numbers
+var codeInput = document.getElementById('code-input');
+var lineNumbers = document.getElementById('line-numbers');
+function updateLineNumbers() {
+  var lines = codeInput.value.split('\n').length;
+  var html = '';
+  for (var i = 1; i <= lines; i++) html += i + '<br/>';
+  lineNumbers.innerHTML = html;
+}
+codeInput.addEventListener('input', updateLineNumbers);
+updateLineNumbers();
+
+// Tabs
+document.querySelectorAll('.tab').forEach(function(tab) {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelectorAll('.tab-content').forEach(function(p) { p.classList.remove('active'); });
+    tab.classList.add('active');
+    document.getElementById('pane-' + tab.dataset.tab).classList.add('active');
+  });
+});
+
+// Toast
+var toastEl = document.getElementById('toast');
+var toastTimer;
+function showToast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function() { toastEl.classList.remove('show'); }, 2800);
+}
+
+// Pipeline
+var pipeSteps = ['pipe-source','pipe-lex','pipe-parse','pipe-sem','pipe-out'];
+function setPipelineStep(idx) {
+  pipeSteps.forEach(function(id, i) {
+    document.getElementById(id).classList.toggle('active', i <= idx);
+  });
+}
+
+// Examples
+var EXAMPLES = {
+  valid: "int age;\nfloat price = 12.5;\nint count = 0;\nage = 25;\nprice = price * 2;\ncount = age + 10;",
+  duplicate: "int x;\nfloat x;\nint y = 5;\nint y;",
+  invalid: "int 123abc;\nfloat;\nundeclaredVar = 42;\nint z = ;",
+  complex: "int a = 10;\nint b = 5;\nfloat result;\nresult = (a + b) * 2;\nresult = result / (a - 8);\nint d = a * b + (result - 1);\nfloat zero = d / 0;"
+};
+document.getElementById('ex-valid').addEventListener('click', function() { codeInput.value = EXAMPLES.valid; updateLineNumbers(); showToast('Valid example loaded'); });
+document.getElementById('ex-duplicate').addEventListener('click', function() { codeInput.value = EXAMPLES.duplicate; updateLineNumbers(); showToast('Duplicate example loaded'); });
+document.getElementById('ex-invalid').addEventListener('click', function() { codeInput.value = EXAMPLES.invalid; updateLineNumbers(); showToast('Invalid example loaded'); });
+document.getElementById('ex-complex').addEventListener('click', function() { codeInput.value = EXAMPLES.complex; updateLineNumbers(); showToast('Complex example loaded'); });
+document.getElementById('btn-clear').addEventListener('click', function() { codeInput.value = ''; updateLineNumbers(); clearOutput(); setPipelineStep(0); showToast('Editor cleared'); });
+
+// ── LEXER ──────────────────────────────────────────────────────────
+var TT = { KEYWORD:'KEYWORD', IDENTIFIER:'IDENTIFIER', NUMBER:'NUMBER', ASSIGN:'ASSIGN', SEMICOLON:'SEMICOLON', OPERATOR:'OPERATOR', LPAREN:'LPAREN', RPAREN:'RPAREN', ERROR:'ERROR', EOF:'EOF' };
+
+function tokenize(source) {
+  var tokens = [], logs = [], i = 0, line = 1;
+  while (i < source.length) {
+    if (/[\s\r\n]/.test(source[i])) { if (source[i] === '\n') line++; i++; continue; }
+    if (source[i] === '/' && source[i+1] === '/') { while (i < source.length && source[i] !== '\n') i++; continue; }
+    if (/[0-9]/.test(source[i])) {
+      var num = '';
+      while (i < source.length && /[0-9.]/.test(source[i])) num += source[i++];
+      tokens.push({type:TT.NUMBER, value:num, line:line});
+      logs.push({cat:'info', prefix:'TOKEN', text:'NUMBER('+num+')'});
+      continue;
+    }
+    if (/[a-zA-Z_]/.test(source[i])) {
+      var word = '';
+      while (i < source.length && /[a-zA-Z0-9_]/.test(source[i])) word += source[i++];
+      if (word === 'int' || word === 'float') {
+        tokens.push({type:TT.KEYWORD, value:word, line:line});
+        logs.push({cat:'info', prefix:'TOKEN', text:'KEYWORD('+word+')'});
+      } else {
+        tokens.push({type:TT.IDENTIFIER, value:word, line:line});
+        logs.push({cat:'info', prefix:'TOKEN', text:'IDENTIFIER('+word+')'});
+      }
+      continue;
+    }
+    var ch = source[i];
+    if (ch==='='){ tokens.push({type:TT.ASSIGN,   value:'=', line:line}); logs.push({cat:'info',prefix:'TOKEN',text:'ASSIGNMENT(=)'}); i++; continue; }
+    if (ch===';'){ tokens.push({type:TT.SEMICOLON, value:';', line:line}); logs.push({cat:'info',prefix:'TOKEN',text:'SEMICOLON(;)'}); i++; continue; }
+    if (ch==='+'){ tokens.push({type:TT.OPERATOR,  value:'+', line:line}); logs.push({cat:'info',prefix:'TOKEN',text:'OPERATOR(+)'}); i++; continue; }
+    if (ch==='-'){ tokens.push({type:TT.OPERATOR,  value:'-', line:line}); logs.push({cat:'info',prefix:'TOKEN',text:'OPERATOR(-)'}); i++; continue; }
+    if (ch==='*'){ tokens.push({type:TT.OPERATOR,  value:'*', line:line}); logs.push({cat:'info',prefix:'TOKEN',text:'OPERATOR(*)'}); i++; continue; }
+    if (ch==='/'){ tokens.push({type:TT.OPERATOR,  value:'/', line:line}); logs.push({cat:'info',prefix:'TOKEN',text:'OPERATOR(/)'}); i++; continue; }
+    if (ch==='('){ tokens.push({type:TT.LPAREN,    value:'(', line:line}); logs.push({cat:'info',prefix:'TOKEN',text:'LEFT_PAREN(()'}); i++; continue; }
+    if (ch===')'){ tokens.push({type:TT.RPAREN,    value:')', line:line}); logs.push({cat:'info',prefix:'TOKEN',text:'RIGHT_PAREN())'}); i++; continue; }
+    tokens.push({type:TT.ERROR, value:ch, line:line});
+    logs.push({cat:'syntax', prefix:'LEX ERR', text:"Unknown character '"+ch+"' at line "+line});
+    i++;
+  }
+  tokens.push({type:TT.EOF, value:'', line:line});
+  return {tokens:tokens, logs:logs};
+}
+
+// ── PARSER + SEMANTICS ─────────────────────────────────────────────
+function parse(tokens) {
+  var pos = 0, symbolTable = [], logs = [], syntaxErrors = 0, semanticErrors = 0;
+
+  function cur()  { return tokens[pos]   || {type:TT.EOF}; }
+  function peek() { return tokens[pos+1] || {type:TT.EOF}; }
+
+  function findSymbol(name) {
+    for (var j = 0; j < symbolTable.length; j++) if (symbolTable[j].name === name) return symbolTable[j];
+    return null;
+  }
+  function fmtNum(v) {
+    if (v === null || v === undefined) return 'undefined';
+    var n = parseFloat(v);
+    return Number.isInteger(n) ? String(n) : String(parseFloat(n.toFixed(6)));
+  }
+  function declareVariable(dtype, name, initialized, value, line) {
+    if (findSymbol(name)) {
+      logs.push({cat:'semantic', prefix:'SEM ERR', text:"Variable '"+name+"' is already declared (line "+line+")."});
+      semanticErrors++; return;
+    }
+    symbolTable.push({name:name, type:dtype, value:initialized ? value : null, initialized:initialized});
+    if (initialized) logs.push({cat:'decl', prefix:'DECLARE', text:"'"+name+"' declared as "+dtype+", initialized to "+fmtNum(value)+"."});
+    else             logs.push({cat:'decl', prefix:'DECLARE', text:"'"+name+"' declared as "+dtype+" (uninitialized)."});
+  }
+  function assignVariable(name, value, line) {
+    var sym = findSymbol(name);
+    if (!sym) { logs.push({cat:'semantic', prefix:'SEM ERR', text:"Variable '"+name+"' used before declaration (line "+line+")."}); semanticErrors++; return; }
+    sym.value = value; sym.initialized = true;
+    logs.push({cat:'assign', prefix:'ASSIGN', text:"'"+name+"' = "+fmtNum(value)});
+  }
+
+  function parseExpression() { return parseAddSub(); }
+  function parseAddSub() {
+    var left = parseMulDiv();
+    while (cur().type === TT.OPERATOR && (cur().value==='+' || cur().value==='-')) {
+      var op = tokens[pos++].value;
+      var right = parseMulDiv();
+      if (left !== null && right !== null) left = op==='+'? left+right : left-right;
+      else left = null;
+    }
+    return left;
+  }
+  function parseMulDiv() {
+    var left = parseUnary();
+    while (cur().type === TT.OPERATOR && (cur().value==='*' || cur().value==='/')) {
+      var op = tokens[pos++].value;
+      var right = parseUnary();
+      if (op==='/' && right===0) { logs.push({cat:'semantic',prefix:'SEM ERR',text:'Division by zero.'}); semanticErrors++; left=null; }
+      else if (left !== null && right !== null) left = op==='*'? left*right : left/right;
+      else left = null;
+    }
+    return left;
+  }
+  function parseUnary() {
+    if (cur().type===TT.OPERATOR && cur().value==='-') { pos++; var v=parsePrimary(); return v!==null?-v:null; }
+    return parsePrimary();
+  }
+  function parsePrimary() {
+    if (cur().type===TT.NUMBER) return parseFloat(tokens[pos++].value);
+    if (cur().type===TT.IDENTIFIER) {
+      var tok = tokens[pos++];
+      var sym = findSymbol(tok.value);
+      if (!sym) { logs.push({cat:'semantic',prefix:'SEM ERR',text:"Variable '"+tok.value+"' used before declaration (line "+tok.line+")."}); semanticErrors++; return null; }
+      if (!sym.initialized) { logs.push({cat:'warning',prefix:'WARN',text:"Variable '"+tok.value+"' used before initialization; assuming 0."}); return 0; }
+      return sym.value;
+    }
+    if (cur().type===TT.LPAREN) {
+      pos++;
+      var v = parseExpression();
+      if (cur().type!==TT.RPAREN) { logs.push({cat:'syntax',prefix:'SYN ERR',text:"Expected ')' at line "+cur().line+"."}); syntaxErrors++; }
+      else pos++;
+      return v;
+    }
+    return null;
+  }
+
+  function parseStatement() {
+    if (cur().type===TT.KEYWORD) {
+      var typeTok = tokens[pos++], dtype = typeTok.value;
+      if (cur().type!==TT.IDENTIFIER) {
+        logs.push({cat:'syntax',prefix:'SYN ERR',text:"Expected identifier after '"+dtype+"' at line "+typeTok.line+"."});
+        syntaxErrors++;
+        while (cur().type!==TT.SEMICOLON && cur().type!==TT.EOF) pos++;
+        if (cur().type===TT.SEMICOLON) pos++;
+        return;
+      }
+      var nameTok = tokens[pos++];
+      if (cur().type===TT.SEMICOLON) {
+        pos++; declareVariable(dtype, nameTok.value, false, null, nameTok.line);
+      } else if (cur().type===TT.ASSIGN) {
+        pos++;
+        var val = parseExpression();
+        if (cur().type!==TT.SEMICOLON) { logs.push({cat:'syntax',prefix:'SYN ERR',text:"Expected ';' at line "+cur().line+"."}); syntaxErrors++; while (cur().type!==TT.SEMICOLON && cur().type!==TT.EOF) pos++; }
+        if (cur().type===TT.SEMICOLON) pos++;
+        declareVariable(dtype, nameTok.value, true, val!==null?val:0, nameTok.line);
+      } else {
+        logs.push({cat:'syntax',prefix:'SYN ERR',text:"Unexpected token '"+cur().value+"' after '"+nameTok.value+"' (line "+cur().line+")."});
+        syntaxErrors++;
+        while (cur().type!==TT.SEMICOLON && cur().type!==TT.EOF) pos++;
+        if (cur().type===TT.SEMICOLON) pos++;
+      }
+      return;
+    }
+    if (cur().type===TT.IDENTIFIER && peek().type===TT.ASSIGN) {
+      var nameTok2 = tokens[pos++]; pos++;
+      var val2 = parseExpression();
+      if (cur().type!==TT.SEMICOLON) { logs.push({cat:'syntax',prefix:'SYN ERR',text:"Expected ';' at line "+cur().line+"."}); syntaxErrors++; while (cur().type!==TT.SEMICOLON && cur().type!==TT.EOF) pos++; }
+      if (cur().type===TT.SEMICOLON) pos++;
+      assignVariable(nameTok2.value, val2!==null?val2:0, nameTok2.line);
+      return;
+    }
+    if (cur().type!==TT.EOF) {
+      logs.push({cat:'syntax',prefix:'SYN ERR',text:"Unexpected token '"+cur().value+"' at line "+cur().line+". Skipping."});
+      syntaxErrors++;
+      while (cur().type!==TT.SEMICOLON && cur().type!==TT.EOF) pos++;
+      if (cur().type===TT.SEMICOLON) pos++;
+    }
+  }
+  while (cur().type!==TT.EOF) parseStatement();
+  return {symbolTable:symbolTable, logs:logs, syntaxErrors:syntaxErrors, semanticErrors:semanticErrors};
+}
+
+// ── RENDER ─────────────────────────────────────────────────────────
+function clearOutput() {
+  document.getElementById('token-list').innerHTML = '<div class="empty-state"><div class="es-icon">&#128269;</div><p>Token stream will appear here after compilation.</p></div>';
+  document.getElementById('log-output').innerHTML = '<div class="empty-state"><div class="es-icon">&#128203;</div><p>Compilation log will appear here.</p></div>';
+  document.getElementById('sym-table-wrap').innerHTML = '<div class="empty-state"><div class="es-icon">&#128202;</div><p>Symbol table will be populated after compilation.</p></div>';
+  document.getElementById('summary-wrap').innerHTML = '<div class="empty-state"><div class="es-icon">&#127937;</div><p>Compilation summary will appear here.</p></div>';
+  document.getElementById('out-status').textContent = 'Waiting for input\u2026';
+  document.getElementById('out-status').style.color = 'var(--text-muted)';
+}
+
+function tokenClass(t) {
+  if (t.type===TT.KEYWORD)    return 'KEYWORD';
+  if (t.type===TT.IDENTIFIER) return 'IDENTIFIER';
+  if (t.type===TT.NUMBER)     return 'NUMBER';
+  if (t.type===TT.OPERATOR)   return 'OPERATOR';
+  if (t.type===TT.ASSIGN)     return 'ASSIGN';
+  if (t.type===TT.SEMICOLON)  return 'PUNCT';
+  if (t.type===TT.LPAREN || t.type===TT.RPAREN) return 'PAREN';
+  if (t.type===TT.ERROR)      return 'ERROR';
+  return 'PUNCT';
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderTokens(tokens) {
+  var list = document.getElementById('token-list');
+  list.innerHTML = '';
+  var delay = 0;
+  tokens.filter(function(t){ return t.type!==TT.EOF; }).forEach(function(tok, i) {
+    var chip = document.createElement('div');
+    chip.className = 'token-chip ' + tokenClass(tok);
+    chip.style.animationDelay = (i * 35) + 'ms';
+    chip.innerHTML = '<span class="token-label">'+tok.type+'</span><span>'+escHtml(tok.value || '?')+'</span>';
+    list.appendChild(chip);
+  });
+}
+
+function renderLogs(lexLogs, parseLogs) {
+  var out = document.getElementById('log-output');
+  out.innerHTML = '';
+  var allLogs = lexLogs.concat(parseLogs);
+  allLogs.forEach(function(entry, i) {
+    var div = document.createElement('div');
+    div.className = 'log-line ' + entry.cat;
+    div.style.animationDelay = (i * 30) + 'ms';
+    div.innerHTML = '<span class="ln-prefix">['+entry.prefix+']</span><span class="ln-text">'+escHtml(entry.text)+'</span>';
+    out.appendChild(div);
+  });
+}
+
+function renderSymbolTable(table) {
+  var wrap = document.getElementById('sym-table-wrap');
+  if (!table.length) { wrap.innerHTML = '<div class="empty-state"><div class="es-icon">&#128235;</div><p>No variables were declared.</p></div>'; return; }
+  wrap.innerHTML = '<table class="sym-table"><thead><tr><th>#</th><th>Variable</th><th>Type</th><th>Value</th><th>Initialized</th></tr></thead><tbody id="sym-rows"></tbody></table>';
+  var tbody = document.getElementById('sym-rows');
+  table.forEach(function(sym, i) {
+    var tr = document.createElement('tr');
+    tr.style.animationDelay = (i * 60) + 'ms';
+    var v = sym.value !== null && sym.value !== undefined ? (Number.isInteger(sym.value) ? sym.value : parseFloat(sym.value.toFixed(6))) : '&mdash;';
+    tr.innerHTML = '<td style="color:var(--text-muted)">'+(i+1)+'</td><td style="color:var(--accent-cyan);font-weight:600">'+escHtml(sym.name)+'</td><td><span class="type-badge '+sym.type+'">'+sym.type+'</span></td><td>'+v+'</td><td class="'+(sym.initialized?'init-yes':'init-no')+'">'+(sym.initialized?'&#10003; Yes':'&#10007; No')+'</td>';
+    tbody.appendChild(tr);
+  });
+}
+
+function renderSummary(symbolTable, syntaxErrors, semanticErrors) {
+  var wrap = document.getElementById('summary-wrap');
+  var ok = syntaxErrors === 0 && semanticErrors === 0;
+  wrap.innerHTML =
+    '<div class="summary-banner '+(ok?'success':'error')+'">' +
+      '<div class="big-icon">'+(ok?'&#127881;':'&#9888;')+'</div>' +
+      '<div><div class="title">'+(ok?'Compilation Successful':'Compilation Failed')+'</div>' +
+      '<div class="desc">'+(ok?'All '+symbolTable.length+' variable(s) processed with no errors.':'Finished with '+syntaxErrors+' syntax error(s) and '+semanticErrors+' semantic error(s).')+'</div></div>' +
+    '</div>' +
+    '<div class="stats-grid">' +
+      '<div class="stat-card vars" style="animation-delay:100ms"><div class="stat-num">'+symbolTable.length+'</div><div class="stat-label">Variables</div></div>' +
+      '<div class="stat-card syntax" style="animation-delay:200ms"><div class="stat-num">'+syntaxErrors+'</div><div class="stat-label">Syntax Errors</div></div>' +
+      '<div class="stat-card sem" style="animation-delay:300ms"><div class="stat-num">'+semanticErrors+'</div><div class="stat-label">Semantic Errors</div></div>' +
+    '</div>';
+}
+
+// ── COMPILE BUTTON ──────────────────────────────────────────────────
+document.getElementById('btn-compile').addEventListener('click', function() {
+  var source = codeInput.value.trim();
+  if (!source) { showToast('Please enter some code first!'); return; }
+
+  var btn = document.getElementById('btn-compile');
+  btn.classList.add('running');
+  btn.innerHTML = '<span class="spinner"></span> Compiling\u2026';
+  clearOutput();
+
+  setTimeout(function() {
+    setPipelineStep(1);
+    setTimeout(function() {
+      var lexResult = tokenize(source);
+      renderTokens(lexResult.tokens);
+      setPipelineStep(2);
+      setTimeout(function() {
+        setPipelineStep(3);
+        setTimeout(function() {
+          var parseResult = parse(lexResult.tokens);
+          setPipelineStep(4);
+          renderLogs(lexResult.logs, parseResult.logs);
+          renderSymbolTable(parseResult.symbolTable);
+          renderSummary(parseResult.symbolTable, parseResult.syntaxErrors, parseResult.semanticErrors);
+
+          var ok = parseResult.syntaxErrors === 0 && parseResult.semanticErrors === 0;
+          document.getElementById('out-indicator').style.background = ok ? 'var(--accent-green)' : 'var(--accent-red)';
+          document.getElementById('out-status').textContent = ok ? 'Compiled successfully' : (parseResult.syntaxErrors + parseResult.semanticErrors) + ' error(s) found';
+          document.getElementById('out-status').style.color = ok ? 'var(--accent-green)' : 'var(--accent-red)';
+
+          // Switch to tokens tab
+          document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+          document.querySelectorAll('.tab-content').forEach(function(p){ p.classList.remove('active'); });
+          document.getElementById('tab-tokens').classList.add('active');
+          document.getElementById('pane-tokens').classList.add('active');
+
+          showToast(ok ? 'Compilation successful!' : 'Completed with ' + (parseResult.syntaxErrors + parseResult.semanticErrors) + ' error(s)');
+
+          btn.classList.remove('running');
+          btn.innerHTML = '&#9654;&nbsp; Compile';
+        }, 300);
+      }, 400);
+    }, 300);
+  }, 200);
+});
+</script>
+</body>
+</html>
