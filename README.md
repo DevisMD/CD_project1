@@ -68,3 +68,7 @@ Run examples:
 This is an educational compiler front end, not a complete C compiler. The native version uses a
 global symbol table limited to 200 variables and does not implement scopes, functions, arrays,
 or code generation. The browser demo is a JavaScript simulation of the front-end behavior.
+
+
+
+
