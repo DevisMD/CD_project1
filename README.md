@@ -1,7 +1,7 @@
 # Variable Declaration Compiler — GitHub Pages Demo
 
 An educational Compiler Design project demonstrating lexical analysis, syntax analysis,
-semantic checks, arithmetic expressions, and a symbol table.
+semantic checks, arithmetic expressions, and a symbol table..
 
 ## Try the website
 
