@@ -3,7 +3,7 @@
 An educational Compiler Design project demonstrating lexical analysis, syntax analysis,
 semantic checks, arithmetic expressions, and a symbol table..
 
-## Try the website
+## Try the Website
 
 This repository includes a browser-based interactive demo in `index.html`.
 To publish it with GitHub Pages:
